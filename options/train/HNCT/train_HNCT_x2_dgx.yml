@@ -1,5 +1,5 @@
 # general settings
-name: HNCT_x2
+name: HNCT_train_x2
 model_type: SRModel
 scale: 2
 num_gpu: 1  # set num_gpu: 0 for cpu mode
@@ -10,8 +10,8 @@ datasets:
   train:
     name: DIV2K
     type: PairedImageDataset
-    dataroot_gt: D:\Deep\datasets\DIV2K_train_HR
-    dataroot_lq: D:\Deep\datasets\DIV2K_train_LR_bicubic_x2
+    dataroot_gt: /root/train/DIV2K_train_HR
+    dataroot_lq: /root/train/DIV2K_train_LR_bicubic_X2
     # (for lmdb)
     # dataroot_gt: datasets/DIV2K/DIV2K_train_HR_sub.lmdb
     # dataroot_lq: datasets/DIV2K/DIV2K_train_LR_bicubic_X2_sub.lmdb
@@ -26,16 +26,16 @@ datasets:
     use_rot: true
 
     # data loader
-    num_worker_per_gpu: 1
-    batch_size_per_gpu: 1
+    num_worker_per_gpu: 6
+    batch_size_per_gpu: 16
     dataset_enlarge_ratio: 100
     prefetch_mode: ~
 
   val:
     name: Set5
     type: PairedImageDataset
-    dataroot_gt: D:\Deep\datasets\Set5\x2\HR
-    dataroot_lq: D:\Deep\datasets\Set5\x2\LR
+    dataroot_gt: /root/validate/Set5/x2/HR
+    dataroot_lq: /root/validate/Set5/x2/LR
     io_backend:
       type: disk
 
@@ -80,7 +80,7 @@ train:
 # validation settings
 val:
   val_freq: !!float 5e3
-  save_img: false
+  save_img: true
 
   metrics:
     psnr: # metric name, can be arbitrary
@@ -90,7 +90,7 @@ val:
 
 # logging settings
 logger:
-  print_freq: 100
+  print_freq: 500
   save_checkpoint_freq: !!float 5e3
   use_tb_logger: true
   wandb:

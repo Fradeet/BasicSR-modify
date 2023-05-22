@@ -445,7 +445,7 @@ def pixelshuffle_block(in_channels, out_channels, upscale_factor=2, kernel_size=
 class HNCT(nn.Module):
     # 什么代码，为什么原来的 scale 是一个定值？
     # PyTorch nn 初始化函数
-    def __init__(self, in_nc=3, nf=50, num_modules=4, out_nc=3, upscale=3):
+    def __init__(self, in_nc=3, nf=50, num_modules=4, out_nc=3, upscale=2):
         super(HNCT, self).__init__()
 
         # B 是一个自定义的模块，用于构建网络

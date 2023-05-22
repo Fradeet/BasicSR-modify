@@ -33,7 +33,7 @@ datasets:
 network_g:
   type: HNCT
   in_nc: 3
-  nf: 50
+  nf: 50 #Don't torch
   num_modules: 4
   out_nc: 3
   upscale: 2

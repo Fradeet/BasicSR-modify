@@ -75,6 +75,7 @@ class ELAN(nn.Module):
         x = self.tail(res)
         x = self.add_mean(x)
 
+    # 返回一个张量
         return x[:, :, 0:H * self.scale, 0:W * self.scale]
 
     def check_image_size(self, x):

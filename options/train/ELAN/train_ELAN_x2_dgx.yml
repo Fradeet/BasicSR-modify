@@ -1,5 +1,5 @@
 # general settings
-name: train_ELAN_x2_v1
+name: train_ELAN_x2_v2
 model_type: SRModel
 scale: 2
 num_gpu: 1  # set num_gpu: 0 for cpu mode

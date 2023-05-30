@@ -89,7 +89,7 @@ val:
 
   metrics:
     psnr: # metric name, can be arbitrary
-      type: calculate_psnr_pt
+      type: calculate_psnr
       crop_border: 2
       test_y_channel: true
 

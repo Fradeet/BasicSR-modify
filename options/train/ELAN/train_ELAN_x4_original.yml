@@ -45,8 +45,8 @@ network_g:
   scale: 4
   rgb_range: 255
   colors: 3
-  m_elan: 24
-  c_elan: 60
+  m_elan: 36
+  c_elan: 180
   n_share: 1
   r_expand: 2
   window_sizes: [4, 8, 16]

@@ -18,7 +18,9 @@ class ELAN(nn.Module):
                  c_elan=60,
                  n_share=1,
                  r_expand=2,
-                 rgb_range=255):
+                 rgb_range=255,
+                 rgb_mean=(0.4488, 0.4371, 0.4040),
+                 rgb_std=(1.0, 1.0, 1.0)):
         super(ELAN, self).__init__()
 
         # 改为函数参数
@@ -39,8 +41,8 @@ class ELAN(nn.Module):
         self.c_elan = c_elan
         self.n_share = n_share
         self.r_expand = r_expand
-        self.sub_mean = MeanShift(rgb_range)
-        self.add_mean = MeanShift(rgb_range, sign=1)
+        self.sub_mean = MeanShift(rgb_range, rgb_mean=rgb_mean, rgb_std=rgb_std)
+        self.add_mean = MeanShift(rgb_range, sign=1, rgb_mean=rgb_mean, rgb_std=rgb_std)
 
         # define head module
         m_head = [nn.Conv2d(self.colors, self.c_elan, kernel_size=3, stride=1, padding=1)]
@@ -75,7 +77,7 @@ class ELAN(nn.Module):
         x = self.tail(res)
         x = self.add_mean(x)
 
-    # 返回一个张量
+        # 返回一个张量
         return x[:, :, 0:H * self.scale, 0:W * self.scale]
 
     def check_image_size(self, x):

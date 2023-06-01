@@ -1,16 +1,16 @@
-name: MAN_SR
+name: MAN_SR_x2_dgx_v1
 model_type: SRModel
 scale: 2 # 2/3/4/8
-num_gpu: 8 # or 4
+num_gpu: 2 # or 4
 manual_seed: 10
 
 datasets:
   train:
-    name: DF2K
+    name: DIV2K
     type: PairedImageDataset
-    dataroot_gt: datasets/DF2K/DF2K_HR_sub
-    dataroot_lq: datasets/DF2K/DF2K_bicx2_sub
-    meta_info_file: hat/data/meta_info/meta_info_DF2Ksub_GT.txt
+    dataroot_gt: /root/train/DIV2K_train_HR
+    dataroot_lq: /root/train/DIV2K_train_LR_bicubic_X2
+    # meta_info_file: hat/data/meta_info/meta_info_DF2Ksub_GT.txt
     io_backend:
       type: disk
 
@@ -21,15 +21,15 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 6
-    batch_size_per_gpu: 4
+    batch_size_per_gpu: 32
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
 
   val_1:
     name: Set5
     type: PairedImageDataset
-    dataroot_gt: ./datasets/Set5/GTmod2
-    dataroot_lq: ./datasets/Set5/LRbicx2
+    dataroot_gt: /root/validate/Set5/x2/HR
+    dataroot_lq: /root/validate/Set5/x2/LR
     io_backend:
       type: disk
 
@@ -54,9 +54,9 @@ datasets:
 network_g:
   type: MAN
   scale: 2 #or 3/4
-  n_resblocks: 36 # 5 for MAN-tiny; 24 for MAN-light; 36 for MAN
+  n_resblocks: 5 # 5 for MAN-tiny; 24 for MAN-light; 36 for MAN
   n_resgroups: 1
-  n_feats: 180 # 48 for MAN-tiny; 60 for MAN-light; 180 for MAN
+  n_feats: 48 # 48 for MAN-tiny; 60 for MAN-light; 180 for MAN
 
 # path
 path:
@@ -95,7 +95,7 @@ train:
 # validation settings
 val:
   val_freq: !!float 5e3
-  save_img: false
+  save_img: true
   pbar: False
 
   metrics:

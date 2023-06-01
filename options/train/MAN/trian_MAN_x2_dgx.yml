@@ -1,4 +1,4 @@
-name: MAN_SR_x2_dgx_v1
+name: MAN_tiny_SR_x2_dgx_v1
 model_type: SRModel
 scale: 2 # 2/3/4/8
 num_gpu: 2 # or 4

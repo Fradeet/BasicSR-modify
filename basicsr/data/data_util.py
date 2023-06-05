@@ -266,13 +266,6 @@ def paired_paths_from_text(files, keys, dataroot):
         paths.append(dict([(f'{input_key}_path', input_path), (f'{gt_key}_path', gt_path)]))
     return paths
 
-if __name__ == '__main__':
-    # 用于测试paired_paths_from_text
-    files = ["C:\\Users\\ASUS\\Desktop\\train_sharp_file.txt", "C:\\Users\\ASUS\\Desktop\\train_blur_file.txt"]
-    keys = ['lq', 'gt']
-    dataroot = "C:\\Users\\ASUS\\Desktop"
-    filename_tmpl = '{}'
-    paths = paired_paths_from_text(files, keys, dataroot)
 
 def paths_from_folder(folder):
     """Generate paths from folder.

@@ -1,3 +1,5 @@
+import os.path
+
 import cv2
 import numpy as np
 import torch
@@ -232,6 +234,45 @@ def paired_paths_from_folder(folders, keys, filename_tmpl):
         paths.append(dict([(f'{input_key}_path', input_path), (f'{gt_key}_path', gt_path)]))
     return paths
 
+
+def paired_paths_from_text(files, keys, dataroot):
+    """Scan text to generate image path pairs.
+
+    Args:
+        files (list[str]): A list of text file path. The order of list should
+        keys (list[str]): A list of keys identifying folders. The order should
+        dataroot (str): Path to the root of data.
+    Returns:
+        dict: Image path pairs that contains lq path and gt path.
+    """
+    assert len(files) == 2, ('The len of folders should be 2 with [input_files, gt_files]. '
+                               f'But got {len(files)}')
+    assert len(keys) == 2, f'The len of keys should be 2 with [input_key, gt_key]. But got {len(keys)}'
+    input_file, gt_file = files
+    input_key, gt_key = keys
+
+    with open(input_file, 'r') as f:
+        input_paths = [os.path.normpath(line.strip()) for line in f]
+    with open(gt_file, 'r') as f:
+        gt_paths = [os.path.normpath(line.strip()) for line in f]
+
+
+    assert len(input_paths) == len(gt_paths), (f'{input_key} and {gt_key} datasets have different number of images: '
+                                               f'{len(input_paths)}, {len(gt_paths)}.')
+    paths = []
+    for input_path, gt_path in zip(input_paths, gt_paths):
+        input_path = osp.join(dataroot, input_path)
+        gt_path = osp.join(dataroot, gt_path)
+        paths.append(dict([(f'{input_key}_path', input_path), (f'{gt_key}_path', gt_path)]))
+    return paths
+
+if __name__ == '__main__':
+    # 用于测试paired_paths_from_text
+    files = ["C:\\Users\\ASUS\\Desktop\\train_sharp_file.txt", "C:\\Users\\ASUS\\Desktop\\train_blur_file.txt"]
+    keys = ['lq', 'gt']
+    dataroot = "C:\\Users\\ASUS\\Desktop"
+    filename_tmpl = '{}'
+    paths = paired_paths_from_text(files, keys, dataroot)
 
 def paths_from_folder(folder):
     """Generate paths from folder.

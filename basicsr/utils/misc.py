@@ -91,6 +91,47 @@ def scandir(dir_path, suffix=None, recursive=False, full_path=False):
     return _scandir(dir_path, suffix=suffix, recursive=recursive)
 
 
+# def scanTextFile(text_path, suffix=None, full_path=False):
+#     """Scan a plain file to find the interested files.
+
+#     Args:
+#         text_path (str): Path of the directory.
+#         suffix (str | tuple(str), optional): File suffix that we are
+#             interested in. Default: None.
+#         full_path (bool, optional): If set to True, include the text_path.
+#             Default: False.
+
+#     Returns:
+#         A generator for all the interested files with relative paths.
+#     """
+
+#     if (suffix is not None) and not isinstance(suffix, (str, tuple)):
+#         raise TypeError('"suffix" must be a string or tuple of strings')
+
+#     root = text_path
+
+#     # 不用递归，可以不用子函数
+
+#     def _scanText(text_path, suffix):
+#         # 一个遍历器，遍历文本中的每一行
+#         object_list =
+#         for entry in object_list:
+#             if not entry.name.startswith('.') and entry.is_file():
+#                 if full_path:
+#                     return_path = entry.path
+#                 else:
+#                     return_path = osp.relpath(entry.path, root)
+
+#                 if suffix is None:
+#                     yield return_path
+#                 elif return_path.endswith(suffix):
+#                     yield return_path
+#             else:
+#                 continue
+
+#     return _scanText(text_path, suffix=suffix)
+
+
 def check_resume(opt, resume_iter):
     """Check resume states and pretrain_network paths.
 

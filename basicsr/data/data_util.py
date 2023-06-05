@@ -245,8 +245,7 @@ def paired_paths_from_text(files, keys, dataroot):
     Returns:
         dict: Image path pairs that contains lq path and gt path.
     """
-    assert len(files) == 2, ('The len of folders should be 2 with [input_files, gt_files]. '
-                               f'But got {len(files)}')
+    assert len(files) == 2, ('The len of folders should be 2 with [input_files, gt_files]. ' f'But got {len(files)}')
     assert len(keys) == 2, f'The len of keys should be 2 with [input_key, gt_key]. But got {len(keys)}'
     input_file, gt_file = files
     input_key, gt_key = keys
@@ -255,7 +254,6 @@ def paired_paths_from_text(files, keys, dataroot):
         input_paths = [os.path.normpath(line.strip()) for line in f]
     with open(gt_file, 'r') as f:
         gt_paths = [os.path.normpath(line.strip()) for line in f]
-
 
     assert len(input_paths) == len(gt_paths), (f'{input_key} and {gt_key} datasets have different number of images: '
                                                f'{len(input_paths)}, {len(gt_paths)}.')

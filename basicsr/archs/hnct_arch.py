@@ -10,13 +10,102 @@ from timm.models.layers import to_2tuple, trunc_normal_
 # HNCT 中有 HBCT，HBCT 中有 ESA，SwinT
 
 
+# HNCT
+@ARCH_REGISTRY.register()
+class HNCT(nn.Module):
+    # 什么代码，为什么原来的 scale 是一个定值？
+    # PyTorch nn 初始化函数
+    def __init__(self, in_nc=3, nf=50, num_modules=4, out_nc=3, upscale=2):
+        super(HNCT, self).__init__()
+
+        # B 是一个自定义的模块，用于构建网络
+        self.forwardFeedConv = conv_layer(in_nc, nf, kernel_size=3)
+
+        # 定义了如下网络结构：
+        self.HBCT1 = HBCT(in_channels=nf)
+        self.HBCT2 = HBCT(in_channels=nf)
+        self.HBCT3 = HBCT(in_channels=nf)
+        self.HBCT4 = HBCT(in_channels=nf)
+        self.c = conv_block(nf * num_modules, nf, kernel_size=1, act_type='lrelu')
+        self.LR_conv = conv_layer(nf, nf, kernel_size=3)
+        upsample_block = pixelshuffle_block
+        self.upsampler = upsample_block(nf, out_nc, upscale_factor=upscale)
+        self.scale_idx = 0
+
+    # PyTorch nn 前向传播函数
+    def forward(self, input):
+        out_fea = self.forwardFeedConv(input)
+        out_B1 = self.HBCT1(out_fea)
+        out_B2 = self.HBCT2(out_B1)
+        out_B3 = self.HBCT3(out_B2)
+        out_B4 = self.HBCT4(out_B3)
+        # torch.cat 是 PyTorch 的拼接函数
+        out_B = self.c(torch.cat([out_B1, out_B2, out_B3, out_B4], dim=1))
+        out_lr = self.LR_conv(out_B) + out_fea
+        output = self.upsampler(out_lr)
+
+        return output
+
+    # def set_scale(self, scale_idx):
+    #     self.scale_idx = scale_idx
+
+
+class HBCT(nn.Module):
+
+    def __init__(self, in_channels, distillation_rate=0.25):
+        super(HBCT, self).__init__()
+        self.rc = self.remaining_channels = in_channels
+        self.c1_r = conv_layer(in_channels, self.rc, 3)
+        self.esa = ESA(in_channels, nn.Conv2d)
+        self.esa2 = ESA(in_channels, nn.Conv2d)
+        # self.sparatt = Spartial_Attention.Spartial_Attention()
+        self.swinT = SwinT()
+
+    def forward(self, input):
+        input = self.esa2(input)
+        input = self.swinT(input)
+        out_fused = self.esa(self.c1_r(input))
+        return out_fused
+
+
+class ESA(nn.Module):
+
+    def __init__(self, n_feats, conv):
+        super(ESA, self).__init__()
+        f = n_feats // 4
+        self.conv1 = conv(n_feats, f, kernel_size=1)
+        self.conv_f = conv(f, f, kernel_size=1)
+        self.conv_max = conv(f, f, kernel_size=3, padding=1)
+        self.conv2 = conv(f, f, kernel_size=3, stride=2, padding=0)
+        self.conv3 = conv(f, f, kernel_size=3, padding=1)
+        self.conv3_ = conv(f, f, kernel_size=3, padding=1)
+        self.conv4 = conv(f, n_feats, kernel_size=1)
+        self.sigmoid = nn.Sigmoid()
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        c1_ = (self.conv1(x))
+        c1 = self.conv2(c1_)
+        v_max = F.max_pool2d(c1, kernel_size=7, stride=3)
+        v_range = self.relu(self.conv_max(v_max))
+        c3 = self.relu(self.conv3(v_range))
+        c3 = self.conv3_(c3)
+        c3 = F.interpolate(c3, (x.size(2), x.size(3)), mode='bilinear', align_corners=False)
+        cf = self.conv_f(c1_)
+        c4 = self.conv4(c3 + cf)
+        m = self.sigmoid(c4)
+
+        return x * m
+
+
 # SwinT
 class SwinT(nn.Module):
+
     def __init__(
             # self, conv, n_feats, kernel_size,
             # bias=True, bn=False, act=nn.ReLU(True)):
-            self, n_feats=50):
-
+            self,
+            n_feats=50):
         super(SwinT, self).__init__()
         m = []
         depth = 2
@@ -24,14 +113,17 @@ class SwinT(nn.Module):
         window_size = 8
         resolution = 64
         mlp_ratio = 2.0
-        m.append(BasicLayer(dim=n_feats,
-                            depth=depth,
-                            resolution=resolution,
-                            num_heads=num_heads,
-                            window_size=window_size,
-                            mlp_ratio=mlp_ratio,
-                            qkv_bias=True, qk_scale=None,
-                            norm_layer=nn.LayerNorm))
+        m.append(
+            BasicLayer(
+                dim=n_feats,
+                depth=depth,
+                resolution=resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=True,
+                qk_scale=None,
+                norm_layer=nn.LayerNorm))
         self.transformer_body = nn.Sequential(*m)
 
     def forward(self, x):
@@ -40,8 +132,18 @@ class SwinT(nn.Module):
 
 
 class BasicLayer(nn.Module):
-    def __init__(self, dim, resolution, embed_dim=50, depth=2, num_heads=8, window_size=8,
-                 mlp_ratio=1., qkv_bias=True, qk_scale=None, norm_layer=None):
+
+    def __init__(self,
+                 dim,
+                 resolution,
+                 embed_dim=50,
+                 depth=2,
+                 num_heads=8,
+                 window_size=8,
+                 mlp_ratio=1.,
+                 qkv_bias=True,
+                 qk_scale=None,
+                 norm_layer=None):
 
         super().__init__()
         self.dim = dim
@@ -50,15 +152,18 @@ class BasicLayer(nn.Module):
         self.window_size = window_size
         # build blocks
         self.blocks = nn.ModuleList([
-            SwinTransformerBlock(dim=dim, resolution=resolution,
-                                 num_heads=num_heads, window_size=window_size,
-                                 shift_size=0 if (i % 2 == 0) else window_size // 2,
-                                 mlp_ratio=mlp_ratio,
-                                 qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                 norm_layer=norm_layer)
-            for i in range(depth)])
-        self.patch_embed = PatchEmbed(
-            embed_dim=dim, norm_layer=norm_layer)
+            SwinTransformerBlock(
+                dim=dim,
+                resolution=resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=0 if (i % 2 == 0) else window_size // 2,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                norm_layer=norm_layer) for i in range(depth)
+        ])
+        self.patch_embed = PatchEmbed(embed_dim=dim, norm_layer=norm_layer)
         self.patch_unembed = PatchUnEmbed(embed_dim=dim)
 
     def check_image_size(self, x):
@@ -84,8 +189,17 @@ class BasicLayer(nn.Module):
 
 class SwinTransformerBlock(nn.Module):
 
-    def __init__(self, dim, resolution, num_heads, window_size=8, shift_size=0,
-                 mlp_ratio=4., qkv_bias=True, qk_scale=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(self,
+                 dim,
+                 resolution,
+                 num_heads,
+                 window_size=8,
+                 shift_size=0,
+                 mlp_ratio=4.,
+                 qkv_bias=True,
+                 qk_scale=None,
+                 act_layer=nn.GELU,
+                 norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
         self.resolution = to_2tuple(resolution)
@@ -101,9 +215,7 @@ class SwinTransformerBlock(nn.Module):
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
-            dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale)
+            dim, window_size=to_2tuple(self.window_size), num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale)
 
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
@@ -120,12 +232,10 @@ class SwinTransformerBlock(nn.Module):
         # calculate attention mask for SW-MSA
         H, W = x_size
         img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
-        h_slices = (slice(0, -self.window_size),
-                    slice(-self.window_size, -self.shift_size),
-                    slice(-self.shift_size, None))
-        w_slices = (slice(0, -self.window_size),
-                    slice(-self.window_size, -self.shift_size),
-                    slice(-self.shift_size, None))
+        h_slices = (slice(0, -self.window_size), slice(-self.window_size,
+                                                       -self.shift_size), slice(-self.shift_size, None))
+        w_slices = (slice(0, -self.window_size), slice(-self.window_size,
+                                                       -self.shift_size), slice(-self.shift_size, None))
         cnt = 0
         for h in h_slices:
             for w in w_slices:
@@ -181,18 +291,73 @@ class SwinTransformerBlock(nn.Module):
         return x
 
 
+class PatchEmbed(nn.Module):
+
+    def __init__(self, embed_dim=50, norm_layer=None):
+        super().__init__()
+
+        if norm_layer is not None:
+            self.norm = norm_layer(embed_dim)
+        else:
+            self.norm = None
+
+    def forward(self, x):
+        x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
+        if self.norm is not None:
+            x = self.norm(x)
+        return x
+
+    def flops(self):
+        flops = 0
+        H, W = self.img_size
+        if self.norm is not None:
+            flops += H * W * self.embed_dim
+        return flops
+
+
+class PatchUnEmbed(nn.Module):
+
+    def __init__(self, embed_dim=50):
+        super().__init__()
+        self.embed_dim = embed_dim
+
+    def forward(self, x, x_size):
+        B, HW, C = x.shape
+        x = x.transpose(1, 2).view(B, self.embed_dim, x_size[0], x_size[1])  # B Ph*Pw C
+        return x
+
+    def flops(self):
+        flops = 0
+        return flops
+
+
+class Mlp(nn.Module):
+
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.fc2(x)
+        return x
+
+
 class WindowAttention(nn.Module):
 
-    def __init__(self, dim, window_size, num_heads,
-                 qkv_bias=True,
-                 qk_scale=None):
+    def __init__(self, dim, window_size, num_heads, qkv_bias=True, qk_scale=None):
 
         super().__init__()
         self.dim = dim
         self.window_size = window_size  # Wh, Ww
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = qk_scale or head_dim**-0.5
 
         # define a parameter table of relative position bias
         self.relative_position_bias_table = nn.Parameter(
@@ -249,22 +414,6 @@ def window_reverse(windows, window_size, H, W):
     return x
 
 
-class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.fc2(x)
-        return x
-
-
 def window_partition(x, window_size):
     B, H, W, C = x.shape
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
@@ -272,50 +421,12 @@ def window_partition(x, window_size):
     return windows
 
 
-class PatchEmbed(nn.Module):
-    def __init__(self, embed_dim=50, norm_layer=None):
-        super().__init__()
-
-        if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
-        else:
-            self.norm = None
-
-    def forward(self, x):
-        x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
-        if self.norm is not None:
-            x = self.norm(x)
-        return x
-
-    def flops(self):
-        flops = 0
-        H, W = self.img_size
-        if self.norm is not None:
-            flops += H * W * self.embed_dim
-        return flops
-
-
-class PatchUnEmbed(nn.Module):
-    def __init__(self, embed_dim=50):
-        super().__init__()
-        self.embed_dim = embed_dim
-
-    def forward(self, x, x_size):
-        B, HW, C = x.shape
-        x = x.transpose(1, 2).view(B, self.embed_dim, x_size[0], x_size[1])  # B Ph*Pw C
-        return x
-
-    def flops(self):
-        flops = 0
-        return flops
-
-
 # Block
 # 卷积层，仅用于计算 padding，并返回卷积层
 def conv_layer(in_channels, out_channels, kernel_size, stride=1, dilation=1, groups=1):
     padding = int((kernel_size - 1) / 2) * dilation
-    return nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=True, dilation=dilation,
-                     groups=groups)
+    return nn.Conv2d(
+        in_channels, out_channels, kernel_size, stride, padding=padding, bias=True, dilation=dilation, groups=groups)
 
 
 def norm(norm_type, nc):
@@ -348,13 +459,29 @@ def get_valid_padding(kernel_size, dilation):
     return padding
 
 
-def conv_block(in_nc, out_nc, kernel_size, stride=1, dilation=1, groups=1, bias=True, pad_type='zero', norm_type=None, act_type='relu'):
+def conv_block(in_nc,
+               out_nc,
+               kernel_size,
+               stride=1,
+               dilation=1,
+               groups=1,
+               bias=True,
+               pad_type='zero',
+               norm_type=None,
+               act_type='relu'):
     padding = get_valid_padding(kernel_size, dilation)
     p = pad(pad_type, padding) if pad_type and pad_type != 'zero' else None
     padding = padding if pad_type == 'zero' else 0
 
-    c = nn.Conv2d(in_nc, out_nc, kernel_size=kernel_size, stride=stride, padding=padding,
-                  dilation=dilation, bias=bias, groups=groups)
+    c = nn.Conv2d(
+        in_nc,
+        out_nc,
+        kernel_size=kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        bias=bias,
+        groups=groups)
     a = activation(act_type) if act_type else None
     n = norm(norm_type, out_nc) if norm_type else None
     return sequential(p, c, n, a)
@@ -388,98 +515,7 @@ def sequential(*args):
     return nn.Sequential(*modules)
 
 
-class ESA(nn.Module):
-    def __init__(self, n_feats, conv):
-        super(ESA, self).__init__()
-        f = n_feats // 4
-        self.conv1 = conv(n_feats, f, kernel_size=1)
-        self.conv_f = conv(f, f, kernel_size=1)
-        self.conv_max = conv(f, f, kernel_size=3, padding=1)
-        self.conv2 = conv(f, f, kernel_size=3, stride=2, padding=0)
-        self.conv3 = conv(f, f, kernel_size=3, padding=1)
-        self.conv3_ = conv(f, f, kernel_size=3, padding=1)
-        self.conv4 = conv(f, n_feats, kernel_size=1)
-        self.sigmoid = nn.Sigmoid()
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        c1_ = (self.conv1(x))
-        c1 = self.conv2(c1_)
-        v_max = F.max_pool2d(c1, kernel_size=7, stride=3)
-        v_range = self.relu(self.conv_max(v_max))
-        c3 = self.relu(self.conv3(v_range))
-        c3 = self.conv3_(c3)
-        c3 = F.interpolate(c3, (x.size(2), x.size(3)), mode='bilinear', align_corners=False)
-        cf = self.conv_f(c1_)
-        c4 = self.conv4(c3 + cf)
-        m = self.sigmoid(c4)
-
-        return x * m
-
-
-class HBCT(nn.Module):
-    def __init__(self, in_channels, distillation_rate=0.25):
-        super(HBCT, self).__init__()
-        self.rc = self.remaining_channels = in_channels
-        self.c1_r = conv_layer(in_channels, self.rc, 3)
-        self.esa = ESA(in_channels, nn.Conv2d)
-        self.esa2 = ESA(in_channels, nn.Conv2d)
-        # self.sparatt = Spartial_Attention.Spartial_Attention()
-        self.swinT = SwinT()
-
-    def forward(self, input):
-        input = self.esa2(input)
-        input = self.swinT(input)
-        out_fused = self.esa(self.c1_r(input))
-        return out_fused
-
-
 def pixelshuffle_block(in_channels, out_channels, upscale_factor=2, kernel_size=3, stride=1):
-    conv = conv_layer(in_channels, out_channels * (upscale_factor ** 2), kernel_size, stride)
+    conv = conv_layer(in_channels, out_channels * (upscale_factor**2), kernel_size, stride)
     pixel_shuffle = nn.PixelShuffle(upscale_factor)
     return sequential(conv, pixel_shuffle)
-
-
-# HNCT
-@ARCH_REGISTRY.register()
-class HNCT(nn.Module):
-    # 什么代码，为什么原来的 scale 是一个定值？
-    # PyTorch nn 初始化函数
-    def __init__(self,
-                 in_nc=3,
-                 nf=50,
-                 num_modules=4,
-                 out_nc=3,
-                 upscale=2):
-        super(HNCT, self).__init__()
-
-        # B 是一个自定义的模块，用于构建网络
-        self.fea_conv = conv_layer(in_nc, nf, kernel_size=3)
-
-        # 定义了如下网络结构：
-        self.B1 = HBCT(in_channels=nf)
-        self.B2 = HBCT(in_channels=nf)
-        self.B3 = HBCT(in_channels=nf)
-        self.B4 = HBCT(in_channels=nf)
-        self.c = conv_block(nf * num_modules, nf, kernel_size=1, act_type='lrelu')
-        self.LR_conv = conv_layer(nf, nf, kernel_size=3)
-        upsample_block = pixelshuffle_block
-        self.upsampler = upsample_block(nf, out_nc, upscale_factor=upscale)
-        self.scale_idx = 0
-
-    # PyTorch nn 前向传播函数
-    def forward(self, input):
-        out_fea = self.fea_conv(input)
-        out_B1 = self.B1(out_fea)
-        out_B2 = self.B2(out_B1)
-        out_B3 = self.B3(out_B2)
-        out_B4 = self.B4(out_B3)
-        # torch.cat 是 PyTorch 的拼接函数
-        out_B = self.c(torch.cat([out_B1, out_B2, out_B3, out_B4], dim=1))
-        out_lr = self.LR_conv(out_B) + out_fea
-        output = self.upsampler(out_lr)
-
-        return output
-
-    # def set_scale(self, scale_idx):
-    #     self.scale_idx = scale_idx

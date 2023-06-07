@@ -8,7 +8,7 @@ from basicsr.utils.registry import DATASET_REGISTRY
 
 
 @DATASET_REGISTRY.register()
-class PairedImageDatasetPathText(data.Dataset):
+class PairedImagePathTextDataset(data.Dataset):
     """Paired image dataset for image restoration.
 
     Read LQ (Low Quality, e.g. LR (Low Resolution), blurry, noisy, etc) and GT image pairs.
@@ -34,7 +34,7 @@ class PairedImageDatasetPathText(data.Dataset):
     """
 
     def __init__(self, opt):
-        super(PairedImageDatasetPathText, self).__init__()
+        super(PairedImagePathTextDataset, self).__init__()
         self.opt = opt
         # file client (io backend)
         self.file_client = None
@@ -43,8 +43,8 @@ class PairedImageDatasetPathText(data.Dataset):
         self.std = opt['std'] if 'std' in opt else None
 
         # 改写成从文件中读取路径，加一个文件夹路径作为根路径
-        self.root = opt['dataroot']
-        self.gt_folder, self.lq_folder = self.root, self.root
+        self.dataroot = opt['dataroot']
+        self.gt_folder, self.lq_folder = self.dataroot, self.dataroot
 
         # 传入gt和lq的文件路径
         self.gt_path_file = opt['gt_file']

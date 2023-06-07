@@ -251,9 +251,9 @@ def paired_paths_from_text(files, keys, dataroot):
     input_key, gt_key = keys
 
     with open(input_file, 'r') as f:
-        input_paths = [os.path.normpath(line.strip()) for line in f]
+        input_paths = [osp.normpath(line.strip()) for line in f]
     with open(gt_file, 'r') as f:
-        gt_paths = [os.path.normpath(line.strip()) for line in f]
+        gt_paths = [osp.normpath(line.strip()) for line in f]
 
     assert len(input_paths) == len(gt_paths), (f'{input_key} and {gt_key} datasets have different number of images: '
                                                f'{len(input_paths)}, {len(gt_paths)}.')

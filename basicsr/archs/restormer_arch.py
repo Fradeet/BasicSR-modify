@@ -73,6 +73,7 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         h, w = x.shape[-2:]
+        # return to_4d(self.body(to_3d(x)), h, w)
         return to_4d(self.body(to_3d(x)), h, w)
 
 

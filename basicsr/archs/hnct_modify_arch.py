@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from basicsr.utils.registry import ARCH_REGISTRY
 from timm.models.layers import to_2tuple, trunc_normal_
-from .restormer_arch import LayerNorm, Attention, FeedForward, to_4d
+from .restormer_arch import TransformerBlock as RestormerTransformerBlock
 
 
 # HNCT 中有 HBCT，HBCT 中有 ESA，SwinT
@@ -156,32 +156,32 @@ class BasicLayer(nn.Module):
         self.depth = depth
         self.window_size = window_size
         # build blocks
-        self.blocks = nn.ModuleList([
-            SwinTransformerBlock(
-                dim=dim,
-                resolution=resolution,
-                num_heads=num_heads,
-                window_size=window_size,
-                shift_size=0 if (i % 2 == 0) else window_size // 2,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                norm_layer=norm_layer) for i in range(depth)
-        ])
         # self.blocks = nn.ModuleList([
-        #     RestormerTransformerBlock(
+        #     SwinTransformerBlock(
         #         dim=dim,
-        #         # resolution=resolution,
+        #         resolution=resolution,
         #         num_heads=num_heads,
-        #         # window_size=window_size,
-        #         # shift_size=0 if (i % 2 == 0) else window_size // 2,
-        #         # mlp_ratio=mlp_ratio,
-        #         # norm_layer=norm_layer,
-        #         # qk_scale=qk_scale,
-        #         bias=qkv_bias,
-        #         ffn_expansion_factor=2.66,
-        #         LayerNorm_type='WithBias') for i in range(depth)
+        #         window_size=window_size,
+        #         shift_size=0 if (i % 2 == 0) else window_size // 2,
+        #         mlp_ratio=mlp_ratio,
+        #         qkv_bias=qkv_bias,
+        #         qk_scale=qk_scale,
+        #         norm_layer=norm_layer) for i in range(depth)
         # ])
+        self.blocks = nn.ModuleList([
+            RestormerTransformerBlock(
+                dim=dim,
+                # resolution=resolution,
+                num_heads=num_heads,
+                # window_size=window_size,
+                # shift_size=0 if (i % 2 == 0) else window_size // 2,
+                # mlp_ratio=mlp_ratio,
+                # norm_layer=norm_layer,
+                # qk_scale=qk_scale,
+                bias=qkv_bias,
+                ffn_expansion_factor=2.66,
+                LayerNorm_type='WithBias') for i in range(depth)
+        ])
         self.patch_embed = PatchEmbed(embed_dim=dim, norm_layer=norm_layer)
         self.patch_unembed = PatchUnEmbed(embed_dim=dim)
 

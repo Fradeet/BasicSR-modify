@@ -12,7 +12,9 @@ from .restormer_arch import TransformerBlock as RestormerTransformerBlock
 # HNCT 中有 HBCT，HBCT 中有 ESA，SwinT
 
 # 当前的修改内容
-# 移植 Reformer 的 TransformerBlock 代码  (import)
+# 移植 Reformer 的 TransformerBlock 代码  (import)，导入新增参数
+#  修改了 BasicLayer 内的导入
+# 清理无用传入参数
 
 
 # HNCT
@@ -128,7 +130,8 @@ class SwinT(nn.Module):
                 # mlp_ratio=mlp_ratio,
                 qkv_bias=True,
                 # qk_scale=None,
-                norm_layer=nn.LayerNorm))
+                # norm_layer=nn.LayerNorm
+            ))
         self.transformer_body = nn.Sequential(*m)
 
     def forward(self, x):
@@ -154,8 +157,7 @@ class BasicLayer(nn.Module):
                  depth=2,
                  num_heads=8,
                  window_size=8,
-                 qkv_bias=True,
-                 norm_layer=None):
+                 qkv_bias=True):
 
         super().__init__()
         self.dim = dim
@@ -165,13 +167,7 @@ class BasicLayer(nn.Module):
         self.blocks = nn.ModuleList([
             RestormerTransformerBlock(
                 dim=dim,
-                # resolution=resolution,
                 num_heads=num_heads,
-                # window_size=window_size,
-                # shift_size=0 if (i % 2 == 0) else window_size // 2,
-                # mlp_ratio=mlp_ratio,
-                # norm_layer=norm_layer,
-                # qk_scale=qk_scale,
                 bias=qkv_bias,
                 ffn_expansion_factor=2.66,
                 LayerNorm_type='WithBias') for i in range(depth)
@@ -189,8 +185,9 @@ class BasicLayer(nn.Module):
         #         qk_scale=qk_scale,
         #         norm_layer=norm_layer) for i in range(depth)
         # ])
-        self.patch_embed = PatchEmbed(embed_dim=dim, norm_layer=norm_layer)
-        self.patch_unembed = PatchUnEmbed(embed_dim=dim)
+
+        # self.patch_embed = PatchEmbed(embed_dim=dim, norm_layer=norm_layer)
+        # self.patch_unembed = PatchUnEmbed(embed_dim=dim)
 
     def check_image_size(self, x):
         _, _, h, w = x.size()
@@ -201,6 +198,7 @@ class BasicLayer(nn.Module):
         return x, h, w
 
     def forward(self, x):
+        # 检查图像大小是否符合要求，是否过小（超出边界）需要padding
         x, h, w = self.check_image_size(x)
         _, _, H, W = x.size()
         # x_size = (H, W)
@@ -239,15 +237,12 @@ class SwinTransformerBlock(nn.Module):
         #     self.window_size = min(self.input_resolution)
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
-        # self.norm1 = norm_layer(dim)
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
             dim, window_size=to_2tuple(self.window_size), num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale)
 
         # self.attn = RestormerAttention(
         #     dim, num_heads=num_heads, bias=qkv_bias)
-
-        # self.norm2 = norm_layer(dim)
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)

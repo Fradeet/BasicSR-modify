@@ -121,13 +121,13 @@ class SwinT(nn.Module):
         m.append(
             BasicLayer(
                 dim=n_feats,
-                depth=depth,
-                resolution=resolution,
+                # depth=depth,
+                # resolution=resolution,
                 num_heads=num_heads,
-                window_size=window_size,
-                mlp_ratio=mlp_ratio,
+                # window_size=window_size,
+                # mlp_ratio=mlp_ratio,
                 qkv_bias=True,
-                qk_scale=None,
+                # qk_scale=None,
                 norm_layer=nn.LayerNorm))
         self.transformer_body = nn.Sequential(*m)
 
@@ -138,36 +138,30 @@ class SwinT(nn.Module):
 
 class BasicLayer(nn.Module):
 
+    # def __init__(self,
+    #              dim,
+    #              resolution,
+    #              embed_dim=50,
+    #              depth=2,
+    #              num_heads=8,
+    #              window_size=8,
+    #              mlp_ratio=1.,
+    #              qkv_bias=True,
+    #              qk_scale=None,
+    #              norm_layer=None):
     def __init__(self,
                  dim,
-                 resolution,
-                 embed_dim=50,
                  depth=2,
                  num_heads=8,
                  window_size=8,
-                 mlp_ratio=1.,
                  qkv_bias=True,
-                 qk_scale=None,
                  norm_layer=None):
 
         super().__init__()
         self.dim = dim
-        self.resolution = resolution
+        # self.resolution = resolution
         self.depth = depth
         self.window_size = window_size
-        # build blocks
-        # self.blocks = nn.ModuleList([
-        #     SwinTransformerBlock(
-        #         dim=dim,
-        #         resolution=resolution,
-        #         num_heads=num_heads,
-        #         window_size=window_size,
-        #         shift_size=0 if (i % 2 == 0) else window_size // 2,
-        #         mlp_ratio=mlp_ratio,
-        #         qkv_bias=qkv_bias,
-        #         qk_scale=qk_scale,
-        #         norm_layer=norm_layer) for i in range(depth)
-        # ])
         self.blocks = nn.ModuleList([
             RestormerTransformerBlock(
                 dim=dim,
@@ -182,6 +176,19 @@ class BasicLayer(nn.Module):
                 ffn_expansion_factor=2.66,
                 LayerNorm_type='WithBias') for i in range(depth)
         ])
+        # build blocks
+        # self.blocks = nn.ModuleList([
+        #     SwinTransformerBlock(
+        #         dim=dim,
+        #         resolution=resolution,
+        #         num_heads=num_heads,
+        #         window_size=window_size,
+        #         shift_size=0 if (i % 2 == 0) else window_size // 2,
+        #         mlp_ratio=mlp_ratio,
+        #         qkv_bias=qkv_bias,
+        #         qk_scale=qk_scale,
+        #         norm_layer=norm_layer) for i in range(depth)
+        # ])
         self.patch_embed = PatchEmbed(embed_dim=dim, norm_layer=norm_layer)
         self.patch_unembed = PatchUnEmbed(embed_dim=dim)
 
@@ -196,11 +203,11 @@ class BasicLayer(nn.Module):
     def forward(self, x):
         x, h, w = self.check_image_size(x)
         _, _, H, W = x.size()
-        x_size = (H, W)
-        x = self.patch_embed(x)
+        # x_size = (H, W)
+        # x = self.patch_embed(x)
         for blk in self.blocks:
-            x = blk(x, x_size)
-        x = self.patch_unembed(x, x_size)
+            x = blk(x)
+        # x = self.patch_unembed(x)
         if h != H or w != W:
             x = x[:, :, 0:h, 0:w].contiguous()
         return x
@@ -233,7 +240,7 @@ class SwinTransformerBlock(nn.Module):
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         # self.norm1 = norm_layer(dim)
-        self.norm1 = LayerNormMod(dim, layer_norm_type='WithBias')
+        self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
             dim, window_size=to_2tuple(self.window_size), num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale)
 
@@ -241,7 +248,7 @@ class SwinTransformerBlock(nn.Module):
         #     dim, num_heads=num_heads, bias=qkv_bias)
 
         # self.norm2 = norm_layer(dim)
-        self.norm2 = LayerNormMod(dim, layer_norm_type='WithBias')
+        self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
 
@@ -315,11 +322,11 @@ class SwinTransformerBlock(nn.Module):
         return x
 
 
-class LayerNormMod(LayerNorm):
-    def forward(self, x):
-        h, w = x.shape[-2:]
-        # return to_4d(self.body(to_3d(x)), h, w)
-        return to_4d(self.body(x), h, w)
+# class LayerNormMod(LayerNorm):
+#     def forward(self, x):
+#         h, w = x.shape[-2:]
+#         # return to_4d(self.body(to_3d(x)), h, w)
+#         return to_4d(self.body(x), h, w)
 
 
 class PatchEmbed(nn.Module):

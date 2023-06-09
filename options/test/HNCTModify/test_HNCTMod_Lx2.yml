@@ -1,4 +1,4 @@
-name: HNCT_Lx2_Set5_test_dgx
+name: HNCTMod_Lx2_Set5_test
 model_type: SRModel
 scale: 2
 num_gpu: 1  # set num_gpu: 0 for cpu mode
@@ -8,8 +8,8 @@ datasets:
   test_1:  # the 1st test dataset
     name: Set5
     type: PairedImageDataset
-    dataroot_gt: /root/validate/Set5/x2/HR
-    dataroot_lq: /root/validate/Set5/x2/LR
+    dataroot_gt: D:\Deep\datasets\Set5\x2\HR
+    dataroot_lq: D:\Deep\datasets\Set5\x2\LR
     io_backend:
       type: disk
   # test_2:  # the 2nd test dataset
@@ -31,9 +31,9 @@ datasets:
 
 # network structures
 network_g:
-  type: HNCT
+  type: HNCTModify
   in_nc: 3
-  nf: 50 #Don't torch
+  nf: 50
   num_modules: 4
   out_nc: 3
   upscale: 2

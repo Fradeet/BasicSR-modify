@@ -16,6 +16,7 @@ from basicsr.utils.registry import ARCH_REGISTRY
 from torch.nn import init
 from einops import rearrange
 from einops.layers.torch import Rearrange, Reduce
+from .efficientvit import EfficientViTBlock
 
 
 ##########################################################################
@@ -273,23 +274,23 @@ class ChannelAttention(nn.Module):
         y = self.attention(x)
         return x * y
 
+
 class SqueezeExcitation(nn.Module):
-    def __init__(self, dim, shrinkage_rate = 0.25):
+    def __init__(self, dim, shrinkage_rate=0.25):
         super().__init__()
         hidden_dim = int(dim * shrinkage_rate)
 
         self.gate = nn.Sequential(
             Reduce('b c h w -> b c', 'mean'),
-            nn.Linear(dim, hidden_dim, bias = False),
+            nn.Linear(dim, hidden_dim, bias=False),
             nn.SiLU(),
-            nn.Linear(hidden_dim, dim, bias = False),
+            nn.Linear(hidden_dim, dim, bias=False),
             nn.Sigmoid(),
             Rearrange('b c -> b c 1 1')
         )
 
     def forward(self, x):
         return x * self.gate(x)
-
 
 
 ##---------------ECAAttention ----------
@@ -379,14 +380,14 @@ def conv_layer(in_channels, out_channels, kernel_size, stride=1, dilation=1, gro
 class LFEB(nn.Module):
     def __init__(self, n_feats):
         super().__init__()
-        dim_out=n_feats
+        dim_out = n_feats
         expansion_rate = 1
         shrinkage_rate = 0.25
         hidden_dim = int(expansion_rate * dim_out)
         self.conv_1 = nn.Conv2d(n_feats, n_feats, 1)
         self.GELU = nn.GELU()
-        self.dwconv_2 = nn.Conv2d(hidden_dim, hidden_dim, 3, stride = 1, padding = 1, groups = hidden_dim)
-        self.SE=SqueezeExcitation(hidden_dim, shrinkage_rate = shrinkage_rate)
+        self.dwconv_2 = nn.Conv2d(hidden_dim, hidden_dim, 3, stride=1, padding=1, groups=hidden_dim)
+        self.SE = SqueezeExcitation(hidden_dim, shrinkage_rate=shrinkage_rate)
         self.conv_3 = nn.Conv2d(hidden_dim, dim_out, 1)
 
     def forward(self, x):
@@ -397,6 +398,7 @@ class LFEB(nn.Module):
         x = self.conv_3(x)
         x = x + x_original
         return x
+
 
 #################################################################################################
 
@@ -413,12 +415,19 @@ class LSTB(nn.Module):
         # self.LFE = LFEB(n_feats=dim)
         self.MIRB = MIRB(n_feats=dim)
         # Glable feature extraction
-        self.GFE = TransformerBlock(dim=dim,
-                                    num_heads=num_heads,
-                                    bias=qkv_bias,
-                                    ffn_expansion_factor=ffn_expansion_factor,
-                                    LayerNorm_type='WithBias')
+        # self.GFE = TransformerBlock(dim=dim,
+        #                             num_heads=num_heads,
+        #                             bias=qkv_bias,
+        #                             ffn_expansion_factor=ffn_expansion_factor,
+        #                             LayerNorm_type='WithBias')
 
+        self.vit = EfficientViTBlock(type="s",
+                                     ed=dim,
+                                     kd=dim,
+                                     nh=4,
+                                     kernels=[5, 5, 5, 5, 5, 5, 5, 5],
+                                     resolution=7
+                                     )
 
         # self.esa = ESA(dim)
 
@@ -427,8 +436,8 @@ class LSTB(nn.Module):
         # x = self.LFE(x)
         #
         # Glable
-        x = self.GFE(x)
-
+        # x = self.GFE(x)
+        x = self.vit(x)
         x = self.MIRB(x)
         # x = self.esa(x)
 

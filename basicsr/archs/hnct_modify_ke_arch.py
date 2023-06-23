@@ -11,7 +11,7 @@ from .restormer_arch import TransformerBlock as RestormerTransformerBlock
 from einops import rearrange
 from einops.layers.torch import Rearrange, Reduce
 
-from .biformer_arch import BiLevelRoutingAttention
+from .biformer_arch import BiLevelRoutingAttention , Block
 
 # HNCT 中有 HBCT，HBCT 中有 ESA，SwinT
 
@@ -76,16 +76,18 @@ class HBCT(nn.Module):
         self.esa = ESA(in_channels, nn.Conv2d)
         self.esa2 = ESA(in_channels, nn.Conv2d)
         # self.sparatt = Spartial_Attention.Spartial_Attention()
-        self.swinT = TransformerBlock(dim=in_channels,
-                                      num_heads=num_heads,
-                                      bias=bias,
-                                      ffn_expansion_factor=ffn_expansion_factor,
-                                      LayerNorm_type=LayNorm_type)
+        # self.swinT = TransformerBlock(dim=in_channels,
+        #                               num_heads=num_heads,
+        #                               bias=bias,
+        #                               ffn_expansion_factor=ffn_expansion_factor,
+        #                               LayerNorm_type=LayNorm_type)
 
+        self.bifo = Block(dim=64, drop_path=0, layer_scale_init_value=-1, topk=1, num_heads=8, n_win=2, qk_dim=64, kv_per_win=-1, kv_downsample_ratio=4, kv_downsample_kernel=4, kv_downsample_mode="identity", param_attention="qkv", param_routing=False, diff_routing=False, soft_routing=False, mlp_ratio=4, mlp_dwconv=False, side_dwconv=5, before_attn_dwconv=3, pre_norm=True, auto_pad=True)
 
     def forward(self, input):
         input = self.esa2(input)
-        input = self.swinT(input)
+        # input = self.swinT(input)
+        input = self.bifo(input)
         out_fused = self.esa(self.c1_r(input))
         return out_fused
 
@@ -261,23 +263,27 @@ class TransformerBlock(nn.Module):
 
 
         self.norm1 = LayerNorm(dim, LayerNorm_type)
-        # self.attn = Attention(dim, num_heads, bias)
-        self.attn = BiLevelRoutingAttention(dim=dim, num_heads=num_heads, n_win=6, qk_dim=dim,
-                                            # qk_scale=,
-                                            kv_per_win=-1,
-                                            kv_downsample_ratio=1,
-                                            kv_downsample_kernel=1,
-                                            kv_downsample_mode='identity',
-                                            topk=4, param_attention='qkvo', param_routing=False,
-                                            diff_routing=False, soft_routing=False,
-                                            side_dwconv=5,
-                                            auto_pad=True)
+        self.attn = Attention(dim, num_heads, bias)
+        # self.attn = BiLevelRoutingAttention(dim=dim, num_heads=num_heads, n_win=8, qk_dim=dim,
+        #                                     # qk_scale=,
+        #                                     kv_per_win=-1,
+        #                                     kv_downsample_ratio=1,
+        #                                     kv_downsample_kernel=1,
+        #                                     kv_downsample_mode='identity',
+        #                                     topk=1, param_attention='qkv', param_routing=False,
+        #                                     diff_routing=False, soft_routing=False,
+        #                                     side_dwconv=5,
+        #                                     auto_pad=True)
         self.norm2 = LayerNorm(dim, LayerNorm_type)
         self.ffn = FeedForward(dim, ffn_expansion_factor, bias)
 
     def forward(self, x):
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
+        x_original = x.clone()
+        x = self.norm1(x)
+        # 需要转换为 NHWC 格式
+        x = self.attn(x) + x_original
+        x_original = x
+        x = x_original + self.ffn(self.norm2(x))
 
         return x
 
